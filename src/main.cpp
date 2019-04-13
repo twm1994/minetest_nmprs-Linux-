@@ -1,58 +1,5 @@
-/*
- (c) 2010 Perttu Ahola <celeron55@gmail.com>
 
- Minetest
-
- TODO: Check for obsolete todos
- TODO: Storing map on disk, preferably dynamically
- TODO: struct settings, with a mutex and get/set functions
- TODO: Implement torches and similar light sources (halfway done)
- TODO: A menu
- TODO: A cache class that can be used with lightNeighbors,
- unlightNeighbors and probably many others. Look for
- implementation in lightNeighbors
- TODO: Proper objects for random stuff in this file, like
- g_selected_material
- TODO: See if changing to 32-bit position variables doesn't raise
- memory consumption a lot.
- Now:
- TODO: Have to implement mutexes to MapSectors; otherwise initial
- lighting might fail
- TODO: Adding more heightmap points to MapSectors
-
- Network protocol:
- - Client map data is only updated from the server's,
- EXCEPT FOR lighting.
-
- Actions:
-
- - User places block
- -> Client sends PLACED_BLOCK(pos, node)
- -> Server validates and sends MAP_SINGLE_CHANGE(pos, node)
- -> Client applies change and recalculates lighting and face cache
-
- - User starts digging
- -> Client sends START_DIGGING(pos)
- -> Server starts timer
- - if user stops digging:
- -> Client sends STOP_DIGGING
- -> Server stops timer
- - if user continues:
- -> Server waits timer
- -> Server sends MAP_SINGLE_CHANGE(pos, node)
- -> Client applies change and recalculates lighting and face cache
-
- */
-
-/*
- Setting this to 1 enables a special camera mode that forces
- the renderers to think that the camera statically points from
- the starting place to a static direction.
-
- This allows one to move around with the player and see what
- is actually drawn behind solid things etc.
- */
-#define FIELD_OF_VIEW_TEST 1
+#define FIELD_OF_VIEW_TEST 0
 
 // Enable unit tests
 #define ENABLE_TESTS 0
@@ -83,14 +30,14 @@ using namespace jthread;
 #include "common_irrlicht.h"
 #include "map.h"
 #include "player.h"
-#include "npc.h"
+// #include "npc.h"
 #include "main.h"
 #include "test.h"
 #include "environment.h"
 #include "server.h"
 #include "client.h"
 #include <string>
-
+#include <map>
 const char *g_material_filenames[MATERIALS_COUNT] = { "../data/stone.png",
         "../data/grass.png", "../data/water.png", };
 
@@ -114,14 +61,6 @@ u16 g_selected_material = 0;
  */
 
 std::ofstream dfile("debug.txt");
-//std::ofstream dfile_con("debug_con.txt");
-//std::ofstream dfile_server("debug_server.txt");
-//std::ofstream dfile_client("debug_client.txt");
-//std::ofstream dfile_dummy("debug_dummy.txt");
-//std::ofstream dfile_map_gen("map_gen.txt");
-//
-//std::ostream dout_dummy(dfile_dummy.rdbuf());
-//std::ostream dout_map_gen(dfile_map_gen.rdbuf());
 
 // Connection
 std::ostream dout_con(dfile.rdbuf());
@@ -129,33 +68,9 @@ std::ostream dout_con(dfile.rdbuf());
 
 // Server;
 std::ostream dout_server(dfile.rdbuf());
-//std::ostream dout_server(dfile_server.rdbuf());
 
 // Client
 std::ostream dout_client(dfile.rdbuf());
-//std::ostream dout_client(dfile_client.rdbuf());
-
-/*
- TimeTaker
- */
-
-class TimeTaker {
-public:
-    TimeTaker(const char *name, IrrlichtDevice *dev) {
-        m_name = name;
-        m_dev = dev;
-        m_time1 = m_dev->getTimer()->getRealTime();
-    }
-    ~TimeTaker() {
-        u32 time2 = m_dev->getTimer()->getRealTime();
-        u32 dtime = time2 - m_time1;
-        std::cout << m_name << " took " << dtime << "ms" << std::endl;
-    }
-private:
-    const char *m_name;
-    IrrlichtDevice *m_dev;
-    u32 m_time1;
-};
 
 Player *player;
 
@@ -192,6 +107,21 @@ public:
                 }
 
             }
+            if ((event.KeyInput.Key == KEY_LCONTROL
+                    || event.KeyInput.Key == KEY_RCONTROL)
+                    && event.KeyInput.PressedDown) {
+                ctrl = !ctrl;
+            }
+            if ((event.KeyInput.Key == KEY_ESCAPE && event.KeyInput.PressedDown)) {
+                if (!isPaused) {
+                    isPaused = true;
+                } else {
+                    isExit = true;
+                }
+            }
+            if ((event.KeyInput.Key == KEY_KEY_Q && isPaused)) {
+                isPaused = false;
+            }
         }
 
         if (event.EventType == irr::EET_MOUSE_INPUT_EVENT) {
@@ -200,6 +130,9 @@ public:
             }
             if (event.MouseInput.Event == EMIE_RMOUSE_PRESSED_DOWN) {
                 rightclicked = true;
+            }
+            if (event.MouseInput.Event == EMIE_MOUSE_WHEEL) {
+                wheel = event.MouseInput.Wheel;
             }
         }
 
@@ -216,162 +149,30 @@ public:
             keyIsDown[i] = false;
         leftclicked = false;
         rightclicked = false;
+        wheel = 0;
+        ctrl = false;
+        walking = false;
+        isPaused = false;
+        isExit = false;
     }
 
     bool leftclicked;
     bool rightclicked;
+    float wheel;
+    bool ctrl;
+    bool walking;
+    bool isPaused;
+    bool isExit;
 private:
     // We use this array to store the current state of each key
     bool keyIsDown[KEY_KEY_CODES_COUNT];
-    bool walking = false;
     //s32 mouseX;
     //s32 mouseY;
 };
 
-void updateViewingRange(f32 frametime) {
-#if 1
-    static f32 counter = 0;
-    if (counter > 0) {
-        counter -= frametime;
-        return;
-    }
-    counter = 5.0; //seconds
-
-    g_viewing_range_nodes_mutex.Lock();
-    bool changed = false;
-    if (frametime > 1.0 / FPS_MIN
-            || g_viewing_range_nodes > VIEWING_RANGE_NODES_MAX) {
-        if (g_viewing_range_nodes > VIEWING_RANGE_NODES_MIN) {
-            g_viewing_range_nodes -= MAP_BLOCKSIZE / 2;
-            changed = true;
-        }
-    } else if (frametime < 1.0 / FPS_MAX
-            || g_viewing_range_nodes < VIEWING_RANGE_NODES_MIN) {
-        if (g_viewing_range_nodes < VIEWING_RANGE_NODES_MAX) {
-            g_viewing_range_nodes += MAP_BLOCKSIZE / 2;
-            changed = true;
-        }
-    }
-    if (changed) {
-        std::cout << "g_viewing_range_nodes = " << g_viewing_range_nodes
-                << std::endl;
-    }
-    g_viewing_range_nodes_mutex.Unlock();
-#endif
-}
-
-s16 temp16;
-f32 tempf;
-v3f tempv3f1;
-v3f tempv3f2;
-
-void SpeedTests(IrrlichtDevice *device) {
-    /*
-     Test stuff
-     */
-
-    //test();
-    //return 0;
-    /*TestThread thread;
-     thread.Start();
-     std::cout<<"thread started"<<std::endl;
-     while(thread.IsRunning()) sleep(1);
-     std::cout<<"thread ended"<<std::endl;
-     return 0;*/
-
-    {
-        std::cout << "Testing floating-point conversion speed" << std::endl;
-        u32 time1 = device->getTimer()->getRealTime();
-        tempf = 0.001;
-        for (u32 i = 0; i < 10000000; i++) {
-            temp16 += tempf;
-            tempf += 0.001;
-        }
-        u32 time2 = device->getTimer()->getRealTime();
-        u32 fp_conversion_time = time2 - time1;
-        std::cout << "Done. " << fp_conversion_time << "ms" << std::endl;
-        //assert(fp_conversion_time < 1000);
-    }
-
-    {
-        std::cout << "Testing floating-point vector speed" << std::endl;
-        u32 time1 = device->getTimer()->getRealTime();
-
-        tempv3f1 = v3f(1, 2, 3);
-        tempv3f2 = v3f(4, 5, 6);
-        for (u32 i = 0; i < 40000000; i++) {
-            tempf += tempv3f1.dotProduct(tempv3f2);
-            tempv3f2 += v3f(7, 8, 9);
-        }
-
-        u32 time2 = device->getTimer()->getRealTime();
-        u32 dtime = time2 - time1;
-        std::cout << "Done. " << dtime << "ms" << std::endl;
-    }
-
-    {
-        std::cout << "Testing core::map speed" << std::endl;
-        u32 time1 = device->getTimer()->getRealTime();
-
-        core::map<v2s16, f32> map1;
-        tempf = -324;
-        for (s16 y = 0; y < 500; y++) {
-            for (s16 x = 0; x < 500; x++) {
-                map1.insert(v2s16(x, y), tempf);
-                tempf += 1;
-            }
-        }
-        for (s16 y = 500 - 1; y >= 0; y--) {
-            for (s16 x = 0; x < 500; x++) {
-                tempf = map1[v2s16(x, y)];
-            }
-        }
-
-        u32 time2 = device->getTimer()->getRealTime();
-        u32 dtime = time2 - time1;
-        std::cout << "Done. " << dtime << "ms" << std::endl;
-    }
-
-    {
-        std::cout << "Testing mutex speed" << std::endl;
-        u32 time1 = device->getTimer()->getRealTime();
-        u32 time2 = time1;
-
-        JMutex m;
-        m.Init();
-        u32 n = 0;
-        u32 i = 0;
-        do {
-            n += 10000;
-            for (; i < n; i++) {
-                m.Lock();
-                m.Unlock();
-            }
-            time2 = device->getTimer()->getRealTime();
-        }
-        // Do at least 10ms
-        while (time2 < time1 + 10);
-
-        u32 dtime = time2 - time1;
-        u32 per_ms = n / dtime;
-        std::cout << "Done. " << dtime << "ms, " << per_ms << "/ms"
-                << std::endl;
-    }
-
-    //assert(0);
-}
-
 int main() {
     sockets_init();
     atexit(sockets_cleanup);
-
-    /*
-     Run unit tests
-     */
-    if (ENABLE_TESTS)
-        run_tests();
-
-    //return 0; //DEBUG
 
     /*
      Initialization
@@ -418,36 +219,11 @@ int main() {
     /*
      Resolution selection
      */
+    u16 screenW = 1024;
+    u16 screenH = 768;
+    // u16 screenW = 800;
+    // u16 screenH = 600;
 
-    u16 screenW = 800;
-    u16 screenH = 600;
-
-    /*
-     u16 resolutions[][2] = {
-     {640,480},
-     {800,600},
-     {1024,768},
-     {1280,1024}
-     };
-
-     u16 res_count = sizeof(resolutions)/sizeof(resolutions[0]);
-
-     std::cout<<"Select window resolution "
-     <<"(type a number and press enter):"<<std::endl;
-     for(u16 i=0; i<res_count; i++)
-     {
-     std::cout<<(i+1)<<": "<<resolutions[i][0]<<"x"
-     <<resolutions[i][1]<<std::endl;
-     }
-     u16 r0;
-     std::cin>>r0;
-     if(r0 > res_count || r0 == 0)
-     r0 = 0;
-     u16 screenW = resolutions[r0-1][0];
-     u16 screenH = resolutions[r0-1][1];
-     */
-
-    //
     video::E_DRIVER_TYPE driverType;
 
 #ifdef _WIN32
@@ -480,14 +256,21 @@ int main() {
     scene::ISceneManager* smgr = device->getSceneManager();
 
     gui::IGUIEnvironment* guienv = device->getGUIEnvironment();
+
+    video::ITexture* image = driver->getTexture(
+            "../data/pause.png");
+    u16 imgWidth = 600;
+    u16 imgHeight = 600;
+    gui::IGUIImage* pauseOverlay = guienv->addImage(image,
+            core::position2d<int>(screenW / 2 - imgWidth / 2,
+                    screenH / 2 - imgHeight / 2));
+    pauseOverlay->setVisible(false);
+
     gui::IGUISkin* skin = guienv->getSkin();
     gui::IGUIFont* font = guienv->getFont("../data/fontlucida.png");
     if (font)
         skin->setFont(font);
-    //skin->setColor(gui::EGDC_BUTTON_TEXT, video::SColor(255,0,0,0));
     skin->setColor(gui::EGDC_BUTTON_TEXT, video::SColor(255, 255, 255, 255));
-    //skin->setColor(gui::EGDC_3D_HIGH_LIGHT, video::SColor(0,0,0,0));
-    //skin->setColor(gui::EGDC_3D_SHADOW, video::SColor(0,0,0,0));
     skin->setColor(gui::EGDC_3D_HIGH_LIGHT, video::SColor(255, 0, 0, 0));
     skin->setColor(gui::EGDC_3D_SHADOW, video::SColor(255, 0, 0, 0));
 
@@ -618,395 +401,426 @@ int main() {
 
         // Time is in milliseconds
         u32 lasttime = device->getTimer()->getTime();
-
+        map<v3s16, MapNode> selected;
         while (device->run()) {
-            /*
-             Time difference calculation
-             */
-            u32 time = device->getTimer()->getTime();
-            f32 dtime; // in seconds
-            if (time > lasttime)
-                dtime = (time - lasttime) / 1000.0;
-            else
-                dtime = 0;
-            lasttime = time;
-
-            updateViewingRange(dtime);
-
-            // Collected during the loop and displayed
-            core::list<core::aabbox3d<f32> > hilightboxes;
-
-            /*
-             Special keys
-             */
-            if (receiver.IsKeyDown(irr::KEY_ESCAPE)) {
-                break;
-            }
-
-            v3f zoom_direction = v3f(0, 0, 1);
-            zoom_direction.rotateXZBy(camera_yaw);
-            /*Camera zoom*/
-            if (receiver.IsKeyDown(irr::KEY_UP)) {
-                camera_zoom += zoom_speed;
-            }
-
-            if (receiver.IsKeyDown(irr::KEY_DOWN)) {
-                camera_zoom -= zoom_speed;
-            }
-            if (camera_zoom < zoom_min) {
-                camera_zoom = zoom_min;
-            } else if (camera_zoom > zoom_max) {
-                camera_zoom = zoom_max;
-            }
-
-            /*Camera rotate*/
-            if (receiver.IsKeyDown(irr::KEY_LEFT)) {
-                camera_rotate -= rotate_speed;
-            }
-
-            if (receiver.IsKeyDown(irr::KEY_RIGHT)) {
-                camera_rotate += rotate_speed;
-            }
-            /*
-             Player speed control
-             */
-
-            v3f move_direction = v3f(0, 0, 1);
-            move_direction.rotateXZBy(camera_yaw);
-
-            v3f speed = v3f(0, 0, 0);
-            if (receiver.IsKeyDown(irr::KEY_KEY_W)) {
-                speed += move_direction;
-            }
-            if (receiver.IsKeyDown(irr::KEY_KEY_S)) {
-                speed -= move_direction;
-            }
-            if (receiver.IsKeyDown(irr::KEY_KEY_A)) {
-                speed += move_direction.crossProduct(v3f(0, 1, 0));
-            }
-            if (receiver.IsKeyDown(irr::KEY_KEY_D)) {
-                speed += move_direction.crossProduct(v3f(0, -1, 0));
-            }
-            if (receiver.IsKeyDown(irr::KEY_SPACE)) {
-                if (player->touching_ground) {
-                    //player_speed.Y = 30*BS;
-                    //player.speed.Y = 5*BS;
-                    player->speed.Y = 6.5 * BS;
+            // game pause check
+            if (receiver.isPaused) {
+                if (!pauseOverlay->isVisible()) {
+                    device->getTimer()->stop();
+                    pauseOverlay->setVisible(true);
                 }
-            }
+                if (device->isWindowActive()) {
+                    driver->beginScene(true, true,
+                            video::SColor(0, 200, 200, 200));
 
-            // The speed of the player (Y is ignored)
-            speed = speed.normalize() * walkspeed_max;
+                    guienv->drawAll();
 
-            f32 inc = walk_acceleration * BS * dtime;
-            if (player->speed.X < speed.X - inc)
-                player->speed.X += inc;
-            else if (player->speed.X > speed.X + inc)
-                player->speed.X -= inc;
-            else if (player->speed.X < speed.X)
-                player->speed.X = speed.X;
-            else if (player->speed.X > speed.X)
-                player->speed.X = speed.X;
+                    driver->endScene();
+                }
+            } else {
+                if (pauseOverlay->isVisible()) {
+                    pauseOverlay->setVisible(false);
+                    device->getTimer()->start();
+                }
 
-            if (player->speed.Z < speed.Z - inc)
-                player->speed.Z += inc;
-            else if (player->speed.Z > speed.Z + inc)
-                player->speed.Z -= inc;
-            else if (player->speed.Z < speed.Z)
-                player->speed.Z = speed.Z;
-            else if (player->speed.Z > speed.Z)
-                player->speed.Z = speed.Z;
+                /*
+                 Time difference calculation
+                 */
+                u32 time = device->getTimer()->getTime();
+                f32 dtime; // step interval, in seconds
+                if (time > lasttime)
+                    dtime = (time - lasttime) / 1000.0;
+                else
+                    dtime = 0;
+                lasttime = time;
 
-            /*
-             Process environment
-             */
+                // Collected during the loop and displayed
+                core::list<core::aabbox3d<f32> > hilightboxes;
 
-            {
-                //TimeTaker("client.step(dtime)", device);
-                client.step(dtime);
-            }
+                /*
+                 Special keys
+                 */
 
-            if (server != NULL) {
-                //TimeTaker("server->step(dtime)", device);
-                server->step(dtime);
-            }
+                v3f zoom_direction = v3f(0, 0, 1);
+                zoom_direction.rotateXZBy(camera_yaw);
+                /*Camera zoom*/
+                if (receiver.IsKeyDown(irr::KEY_UP)) {
+                    camera_zoom += zoom_speed;
+                }
 
-            /*
-             Mouse and camera control
-             */
+                if (receiver.IsKeyDown(irr::KEY_DOWN)) {
+                    camera_zoom -= zoom_speed;
+                }
+                if (receiver.wheel != 0) {
+                    camera_zoom += receiver.wheel;
+                    receiver.wheel = 0;
+                }
+                if (camera_zoom < zoom_min) {
+                    camera_zoom = zoom_min;
+                } else if (camera_zoom > zoom_max) {
+                    camera_zoom = zoom_max;
+                }
 
-            if (device->isWindowActive()) {
-                if (first_loop_after_window_activation) {
-                    first_loop_after_window_activation = false;
+                /*Camera rotate*/
+                if (receiver.IsKeyDown(irr::KEY_LEFT)) {
+                    camera_rotate -= rotate_speed;
+                }
+
+                if (receiver.IsKeyDown(irr::KEY_RIGHT)) {
+                    camera_rotate += rotate_speed;
+                }
+
+                /*
+                 Player speed control
+                 */
+                // get movement direction
+                // default direction, facing ahead
+                v3f move_direction = v3f(0, 0, 1);
+                move_direction.rotateXZBy(camera_yaw);
+                v3f speed = v3f(0, 0, 0);
+                // determine movement direction
+                if (receiver.IsKeyDown(irr::KEY_KEY_W)) {
+                    speed += move_direction;
+                }
+                if (receiver.IsKeyDown(irr::KEY_KEY_S)) {
+                    speed -= move_direction;
+                }
+                if (receiver.IsKeyDown(irr::KEY_KEY_A)) {
+                    // counter-clockwise rotation against the plane formed by move_direction and Y direction
+                    speed += move_direction.crossProduct(v3f(0, 1, 0));
+                }
+                if (receiver.IsKeyDown(irr::KEY_KEY_D)) {
+                    // clockwise rotation against the plane: move_direction + Y direction
+                    speed += move_direction.crossProduct(v3f(0, -1, 0));
+                }
+                if (receiver.IsKeyDown(irr::KEY_SPACE)) {
+                    if (player->touching_ground) {
+                        //player_speed.Y = 30*BS;
+                        //player.speed.Y = 5*BS;
+                        player->speed.Y = 6.5 * BS;
+                    }
+                }
+                // Calculate the maximal movement speed of the player (Y is ignored): direction * max_speed
+                speed = speed.normalize() * walkspeed_max;
+                // speed value change per loop
+                f32 inc = walk_acceleration * BS * dtime;
+                // new player speed calculation, limited by the max_speed
+                // x-wise
+                if (player->speed.X < speed.X - inc)
+                    player->speed.X += inc; // positive new direction, new speed not exceeding the max_speed
+                else if (player->speed.X > speed.X + inc)
+                    player->speed.X -= inc; // negative new direction, new speed not exceeding the max_speed
+                else if (player->speed.X < speed.X)
+                    player->speed.X = speed.X; // positive new direction, new speed exceeding the max_speed
+                else if (player->speed.X > speed.X)
+                    player->speed.X = speed.X; // negative new direction, new speed exceeding the max_speed
+                // z-wise
+                if (player->speed.Z < speed.Z - inc)
+                    player->speed.Z += inc;
+                else if (player->speed.Z > speed.Z + inc)
+                    player->speed.Z -= inc;
+                else if (player->speed.Z < speed.Z)
+                    player->speed.Z = speed.Z;
+                else if (player->speed.Z > speed.Z)
+                    player->speed.Z = speed.Z;
+
+                /*
+                 Process environment: simulation logical step increment
+                 */
+                // TODO: ???
+                {
+                    client.step(dtime);
+                }
+                if (server != NULL) {
+                    server->step(dtime);
+                }
+
+                /*
+                 Mouse and camera control
+                 */
+                if (device->isWindowActive()) {
+                    // bi-while loop change
+                    if (first_loop_after_window_activation) {
+                        first_loop_after_window_activation = false;
+                    } else {
+                        // calculate the range of pitch and yaw
+//                    s32 dx = device->getCursorControl()->getPosition().X - 320;
+//                    s32 dy = device->getCursorControl()->getPosition().Y - 240;
+                        s32 dx = device->getCursorControl()->getPosition().X
+                                - screenW / 2;
+                        s32 dy = device->getCursorControl()->getPosition().Y
+                                - screenH / 2;
+                        // convert to angle value
+                        camera_yaw -= dx * 0.2;
+                        camera_pitch += dy * 0.2;
+                        if (camera_pitch < -89.9)
+                            camera_pitch = -89.9;
+                        if (camera_pitch > 89.9)
+                            camera_pitch = 89.9;
+                    }
+                    // reset cursor (i.e., crosshair) to the center of the screen
+//                device->getCursorControl()->setPosition(320, 240);
+                    device->getCursorControl()->setPosition(screenW / 2,
+                            screenH / 2);
                 } else {
-                    s32 dx = device->getCursorControl()->getPosition().X
-                            - screenW / 2;
-                    s32 dy = device->getCursorControl()->getPosition().Y
-                            - screenH / 2;
-                    camera_yaw -= dx * 0.2;
-                    camera_pitch += dy * 0.2;
-                    if (camera_pitch < -89.9)
-                        camera_pitch = -89.9; // look up
-                    if (camera_pitch > 89.9)
-                        camera_pitch = 89.9; // look down
+                    first_loop_after_window_activation = true;
                 }
-                device->getCursorControl()->setPosition(screenW / 2,
-                        screenH / 2);
-            } else {
-                first_loop_after_window_activation = true;
-            }
+                // default direction
+                v3f camera_direction = v3f(0, 0, 1);
+                // change the horizontal direction
+                camera_direction.rotateYZBy(camera_pitch);
+                // change the vertical direction
+                camera_direction.rotateXZBy(camera_yaw);
 
-            v3f camera_direction = v3f(0, 0, 1);
-            camera_direction.rotateYZBy(camera_pitch);
-            camera_direction.rotateXZBy(camera_yaw);
+                // change camera height to the position approximate to eye of player
+//            v3f camera_position = player->getPosition()
+//                    + v3f(0, BS + BS / 2, 0);
 
-            v3f p = player->getPosition();
+                v3f p = player->getPosition();
+                // adjust camera if pressing left/right arrow
+                zoom_direction.rotateXZBy(camera_rotate);
+                camera_direction.rotateXZBy(camera_rotate);
+                player->setRotation(v3f(0, -1 * camera_yaw, 0));
+                // BS*1.7 is the value of PLAYER_HEIGHT in player.cpp
+                v3f camera_position = p + v3f(0, BS * 1.65, zoom_max)
+                        + zoom_direction * camera_zoom;
 
-            // Adjust camera if pressing left/right arrow
-            zoom_direction.rotateXZBy(camera_rotate);
-            camera_direction.rotateXZBy(camera_rotate);
-            player->setRotation(v3f(0, -1 * camera_yaw, 0));
+                // update camera position and look-at target
+                camera->setPosition(camera_position);
+                // look-at target: unit vector (representing the direction) from the current player position
+                camera->setTarget(camera_position + camera_direction);
+                // TODO: ???
+                if (FIELD_OF_VIEW_TEST) {
+                    //client.m_env.getMap().updateCamera(v3f(0,0,0), v3f(0,0,1));
+                    client.updateCamera(v3f(0, 0, 0), v3f(0, 0, 1));
+                } else {
+                    //client.m_env.getMap().updateCamera(camera_position, camera_direction);
+                    client.updateCamera(camera_position, camera_direction);
+                }
 
-            //dout_dummy << "-Local player location at time " << time << ": (" << p.X << "," << p.Y << "," << p.Z << ")" << std::endl;
+                /*
+                 Calculate which block the crosshair is pointing to:
+                 by drawing a line between the player and the point d*BS units
+                 distant from the player along with the camera direction
+                 */
+                // TODO
+                for (map<v3s16, MapNode>::iterator it = selected.begin();
+                        it != selected.end(); it++) {
+                    client.restoreNode(it->first, it->second);
+                }
+                selected.clear();
 
-            // BS*1.7 is the value of PLAYER_HEIGHT in player.cpp
-            v3f camera_position = p + v3f(0, BS * 1.65, zoom_max)
-                    + zoom_direction * camera_zoom;
+                if (!receiver.walking && receiver.ctrl) {
 
-            camera->setPosition(camera_position);
-            camera->updateAbsolutePosition();
-            camera->setTarget(camera_position + camera_direction);
+                    //u32 t1 = device->getTimer()->getTime();
+                    f32 d = 4; // max. distance: 5 BS
+                    core::line3d<f32> shootline(camera_position,
+                            camera_position + camera_direction * BS * (d + 1));
+                    bool nodefound = false;
+                    // position of the surface node intersecting the shootline
+                    v3s16 nodepos;
+                    v3s16 neighbourpos;
+                    // the bounding box of the found block face
+                    core::aabbox3d<f32> nodefacebox;
+                    f32 mindistance = BS * 1001;
+                    v3s16 pos_i = Map::floatToInt(player->getPosition());
 
-            if (FIELD_OF_VIEW_TEST) {
-                //client.m_env.getMap().updateCamera(v3f(0,0,0), v3f(0,0,1));
-                client.updateCamera(v3f(0, 0, 0), v3f(0, 0, 1));
-            } else {
-                //client.m_env.getMap().updateCamera(camera_position, camera_direction);
-                client.updateCamera(camera_position, camera_direction);
-            }
+                    s16 a = d;
+                    // create a vector representing the shootline
+                    // start < end
+                    s16 ystart = pos_i.Y + 0 - (camera_direction.Y < 0 ? a : 1);
+                    s16 zstart = pos_i.Z - (camera_direction.Z < 0 ? a : 1);
+                    s16 xstart = pos_i.X - (camera_direction.X < 0 ? a : 1);
+                    s16 yend = pos_i.Y + 1 + (camera_direction.Y > 0 ? a : 1);
+                    s16 zend = pos_i.Z + (camera_direction.Z > 0 ? a : 1);
+                    s16 xend = pos_i.X + (camera_direction.X > 0 ? a : 1);
 
-            /*
-             Calculate what block is the crosshair pointing to
-             */
-
-            //u32 t1 = device->getTimer()->getTime();
-            f32 d = 4; // max. distance
-            core::line3d<f32> shootline(camera_position,
-                    camera_position + camera_direction * BS * (d + 1));
-            bool nodefound = false;
-            v3s16 nodepos;
-            v3s16 neighbourpos;
-            core::aabbox3d<f32> nodefacebox;
-            f32 mindistance = BS * 1001;
-
-            v3s16 pos_i = Map::floatToInt(player->getPosition());
-            //dout_dummy << "---Map::floatToInt(player->getPosition()): (" << pos_i.X << "," << pos_i.Y << "," << pos_i.Z << ")" << std::endl;
-            s16 a = d;
-            s16 ystart = pos_i.Y + 0 - (camera_direction.Y < 0 ? a : 1);
-            s16 zstart = pos_i.Z - (camera_direction.Z < 0 ? a : 1);
-            s16 xstart = pos_i.X - (camera_direction.X < 0 ? a : 1);
-            s16 yend = pos_i.Y + 1 + (camera_direction.Y > 0 ? a : 1);
-            s16 zend = pos_i.Z + (camera_direction.Z > 0 ? a : 1);
-            s16 xend = pos_i.X + (camera_direction.X > 0 ? a : 1);
-
-            for (s16 y = ystart; y <= yend; y++) {
-                for (s16 z = zstart; z <= zend; z++) {
-                    for (s16 x = xstart; x <= xend; x++) {
-                        //dout_dummy << "---Client::getNode at (" << x << "," << y << "," << z << ")" << std::endl;
-                        try {
-                            //if(client.m_env.getMap().getNode(x,y,z).d == MATERIAL_AIR){
-                            if (client.getNode(v3s16(x, y, z)).d == MATERIAL_AIR) {
-                                continue;
-                            }
-                        } catch (InvalidPositionException &e) {
-                            continue;
-                        }
-
-                        v3s16 np(x, y, z);
-                        v3f npf = Map::intToFloat(np);
-
-                        f32 d = 0.01;
-
-                        v3s16 directions[6] = { v3s16(0, 0, 1), // back
-                        v3s16(0, 1, 0), // top
-                        v3s16(1, 0, 0), // right
-                        v3s16(0, 0, -1), v3s16(0, -1, 0), v3s16(-1, 0, 0), };
-
-                        for (u16 i = 0; i < 6; i++) {
-                            //{u16 i=3;
-                            v3f dir_f = v3f(directions[i].X, directions[i].Y,
-                                    directions[i].Z);
-                            v3f centerpoint = npf + dir_f * BS / 2;
-                            f32 distance =
-                                    (centerpoint - camera_position).getLength();
-
-                            if (distance < mindistance) {
-                                core::CMatrix4<f32> m;
-                                m.buildRotateFromTo(v3f(0, 0, 1), dir_f);
-
-                                // This is the back face
-                                v3f corners[2] = { v3f(BS / 2, BS / 2, BS / 2),
-                                        v3f(-BS / 2, -BS / 2, BS / 2 + d) };
-
-                                for (u16 j = 0; j < 2; j++) {
-                                    m.rotateVect(corners[j]);
-                                    corners[j] += npf;
+                    for (s16 y = ystart; y <= yend; y++) {
+                        for (s16 z = zstart; z <= zend; z++) {
+                            for (s16 x = xstart; x <= xend; x++) {
+                                try {
+                                    //if(client.m_env.getMap().getNode(x,y,z).d == MATERIAL_AIR){
+                                    if (client.getNode(v3s16(x, y, z)).d
+                                            == MATERIAL_AIR) {
+                                        continue;
+                                    }
+                                } catch (InvalidPositionException &e) {
+                                    continue;
                                 }
 
-                                //core::aabbox3d<f32> facebox(corners[0],corners[1]);
-                                core::aabbox3d<f32> facebox(corners[0]);
-                                facebox.addInternalPoint(corners[1]);
+                                // node position
+                                v3s16 np(x, y, z);
+                                v3f npf = Map::intToFloat(np);
 
-                                if (facebox.intersectsWithLine(shootline)) {
-                                    nodefound = true;
-                                    nodepos = np;
-                                    neighbourpos = np + directions[i];
-                                    mindistance = distance;
-                                    nodefacebox = facebox;
+                                f32 d = 0.01;
+
+                                // facets
+                                v3s16 directions[6] = { v3s16(0, 0, 1), // back
+                                v3s16(0, 1, 0), // top
+                                v3s16(1, 0, 0), // right
+                                v3s16(0, 0, -1), v3s16(0, -1, 0), v3s16(-1, 0,
+                                        0), };
+
+                                for (u16 i = 0; i < 6; i++) {
+                                    //{u16 i=3;
+                                    v3f dir_f = v3f(directions[i].X,
+                                            directions[i].Y, directions[i].Z);
+                                    v3f centerpoint = npf + dir_f * BS / 2; // center point of the face
+                                    f32 distance = (centerpoint
+                                            - camera_position).getLength(); // distance to the camera
+
+                                    // find the closest block
+                                    if (distance < mindistance) {
+                                        // TODO: ???
+                                        core::CMatrix4<f32> m;
+                                        m.buildRotateFromTo(v3f(0, 0, 1),
+                                                dir_f);
+                                        // This is the back face
+                                        v3f corners[2] = { v3f(BS / 2, BS / 2,
+                                        BS / 2), v3f(-BS / 2, -BS / 2,
+                                        BS / 2 + d) };
+                                        for (u16 j = 0; j < 2; j++) {
+                                            m.rotateVect(corners[j]);
+                                            corners[j] += npf;
+                                            //std::cout<<"box corners["<<j<<"]: ("<<corners[j].X<<","<<corners[j].Y<<","<<corners[j].Z<<")"<<std::endl;
+                                        }
+                                        //core::aabbox3d<f32> facebox(corners[0],corners[1]);
+                                        core::aabbox3d<f32> facebox(corners[0]);
+                                        facebox.addInternalPoint(corners[1]);
+                                        // find the face of the block
+                                        if (facebox.intersectsWithLine(
+                                                shootline)) {
+                                            nodefound = true;
+                                            nodepos = np;
+                                            neighbourpos = np + directions[i];
+                                            // find the closest block
+                                            mindistance = distance;
+                                            nodefacebox = facebox;
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
+                    // highlight the selected surface and add/remove block
+                    if (nodefound) {
+                        static v3s16 nodepos_old(-1, -1, -1);
+                        if (nodepos != nodepos_old) {
+                            std::cout << "Pointing at (" << nodepos.X << ","
+                                    << nodepos.Y << "," << nodepos.Z << ")"
+                                    << std::endl;
+                            nodepos_old = nodepos;
+                        }
+
+                        // for highlighting the found surface of the block
+                        // TODO
+//                hilightboxes.push_back(nodefacebox);
+                        selected[nodepos] = client.getNode(nodepos);
+                        client.highlightNode(nodepos);
+
+                        if (receiver.leftclicked) {
+                            // TODO
+                            selected.erase(nodepos);
+
+                            std::cout << "Removing block (MapNode)"
+                                    << std::endl;
+                            u32 time1 = device->getTimer()->getRealTime();
+
+                            //client.m_env.getMap().removeNodeAndUpdate(nodepos);
+                            client.removeNode(nodepos);
+
+                            u32 time2 = device->getTimer()->getRealTime();
+                            u32 dtime = time2 - time1;
+                            std::cout << "Took " << dtime << "ms" << std::endl;
+                        }
+                        if (receiver.rightclicked) {
+                            // TODO
+                            client.restoreNode(nodepos, selected[nodepos]);
+                            selected.erase(nodepos);
+
+                            std::cout << "Placing block (MapNode)" << std::endl;
+                            u32 time1 = device->getTimer()->getRealTime();
+
+                            MapNode n;
+                            n.d = g_selected_material;
+                            client.addNode(neighbourpos, n);
+
+                            u32 time2 = device->getTimer()->getRealTime();
+                            u32 dtime = time2 - time1;
+                            std::cout << "Took " << dtime << "ms" << std::endl;
+                        }
+                    } else {
+                        //std::cout<<"nodefound == false"<<std::endl;
+                        //positiontextgui->setText(L"");
+                    }
                 }
-            }
 
-            if (nodefound) {
-                static v3s16 nodepos_old(-1, -1, -1);
-                if (nodepos != nodepos_old) {
-                    std::cout << "Pointing at (" << nodepos.X << ","
-                            << nodepos.Y << "," << nodepos.Z << ")"
-                            << std::endl;
-                    nodepos_old = nodepos;
+                receiver.leftclicked = false;
+                receiver.rightclicked = false;
 
-                    /*wchar_t positiontext[20];
-                     swprintf(positiontext, 20, L"(%i,%i,%i)",
-                     nodepos.X, nodepos.Y, nodepos.Z);
-                     positiontextgui->setText(positiontext);*/
+                /*
+                 Update GUI stuff: display the selected material
+                 */
+                static u8 old_selected_material = MATERIAL_AIR;
+                if (g_selected_material != old_selected_material) {
+                    old_selected_material = g_selected_material;
+                    wchar_t temptext[50];
+                    swprintf(temptext, 50, L"Minetest-c55 (F: material=%i)",
+                            g_selected_material);
+                    guitext->setText(temptext);
                 }
 
-                hilightboxes.push_back(nodefacebox);
+                /*
+                 Drawing begins
+                 */
+                video::SColor bgcolor = video::SColor(255, 90, 140, 200);
 
-                if (receiver.leftclicked) {
-                    std::cout << "Removing block (MapNode)" << std::endl;
-                    u32 time1 = device->getTimer()->getRealTime();
+                driver->beginScene(true, true, bgcolor);
 
-                    //client.m_env.getMap().removeNodeAndUpdate(nodepos);
-                    client.removeNode(nodepos);
+                smgr->drawAll();
 
-                    u32 time2 = device->getTimer()->getRealTime();
-                    u32 dtime = time2 - time1;
-                    std::cout << "Took " << dtime << "ms" << std::endl;
+                // draw the crosshair
+                core::vector2d<s32> displaycenter(screenW / 2, screenH / 2);
+                driver->draw2DLine(displaycenter - core::vector2d<s32>(10, 0),
+                        displaycenter + core::vector2d<s32>(10, 0),
+                        video::SColor(255, 255, 255, 255));
+                driver->draw2DLine(displaycenter - core::vector2d<s32>(0, 10),
+                        displaycenter + core::vector2d<s32>(0, 10),
+                        video::SColor(255, 255, 255, 255));
+
+                /*
+                 * draw a box for the highlighted face
+                 * currently, there is only one box, since the hilightboxes is always re-initialized in each loop
+                 */
+                video::SMaterial m;
+                m.Thickness = 10;
+                m.Lighting = false;
+                driver->setMaterial(m);
+                for (core::list<core::aabbox3d<f32> >::Iterator i =
+                        hilightboxes.begin(); i != hilightboxes.end(); i++) {
+                    driver->draw3DBox(*i, video::SColor(255, 0, 0, 0));
                 }
-                if (receiver.rightclicked) {
-                    std::cout << "Placing block (MapNode)" << std::endl;
-                    u32 time1 = device->getTimer()->getRealTime();
 
-                    /*f32 light = client.m_env.getMap().getNode(neighbourpos).light;
-                     MapNode n;
-                     n.d = g_selected_material;
-                     client.m_env.getMap().setNode(neighbourpos, n);
-                     client.m_env.getMap().nodeAddedUpdate(neighbourpos, light);*/
-                    MapNode n;
-                    n.d = g_selected_material;
-                    client.addNode(neighbourpos, n);
+                guienv->drawAll();
 
-                    u32 time2 = device->getTimer()->getRealTime();
-                    u32 dtime = time2 - time1;
-                    std::cout << "Took " << dtime << "ms" << std::endl;
+                driver->endScene();
+
+                /*
+                 Drawing ends
+                 */
+
+                // display the current FPS on GUI
+                u16 fps = driver->getFPS();
+                if (lastFPS != fps) {
+                    core::stringw str = L"Minetest [";
+                    str += driver->getName();
+                    str += "] FPS:";
+                    str += fps;
+                    device->setWindowCaption(str.c_str());
+                    lastFPS = fps;
                 }
-            } else {
-                //std::cout<<"nodefound == false"<<std::endl;
-                //positiontextgui->setText(L"");
-            }
 
-            receiver.leftclicked = false;
-            receiver.rightclicked = false;
-
-            /*
-             Update gui stuff
-             */
-
-            static u8 old_selected_material = MATERIAL_AIR;
-            if (g_selected_material != old_selected_material) {
-                old_selected_material = g_selected_material;
-                wchar_t temptext[50];
-                swprintf(temptext, 50, L"Minetest-c55 (F: material=%i)",
-                        g_selected_material);
-                guitext->setText(temptext);
-            }
-
-            /*
-             Drawing begins
-             */
-
-            /*
-             Background color is choosen based on whether the player is
-             much beyond the initial ground level
-             */
-            /*video::SColor bgcolor;
-             v3s16 p0 = Map::floatToInt(player->position);
-             s16 gy = client.m_env.getMap().getGroundHeight(v2s16(p0.X, p0.Z));
-             if(p0.Y > gy - MAP_BLOCKSIZE)
-             bgcolor = video::SColor(255,90,140,200);
-             else
-             bgcolor = video::SColor(255,0,0,0);*/
-            video::SColor bgcolor = video::SColor(255, 90, 140, 200);
-            driver->draw3DLine(camera->getAbsolutePosition(),
-                    camera->getAbsolutePosition()
-                            + camera_direction * BS * (d + 1),
-                    video::SColor(255, 255, 255, 255));
-            driver->beginScene(true, true, bgcolor);
-            smgr->drawAll();
-
-            core::vector2d<s32> displaycenter(screenW / 2, screenH / 2);
-            driver->draw2DLine(displaycenter - core::vector2d<s32>(10, 0),
-                    displaycenter + core::vector2d<s32>(10, 0),
-                    video::SColor(255, 255, 255, 255));
-            driver->draw2DLine(displaycenter - core::vector2d<s32>(0, 10),
-                    displaycenter + core::vector2d<s32>(0, 10),
-                    video::SColor(255, 255, 255, 255));
-
-            video::SMaterial m;
-            m.Thickness = 10;
-            m.Lighting = false;
-            driver->setMaterial(m);
-
-            for (core::list<core::aabbox3d<f32> >::Iterator i =
-                    hilightboxes.begin(); i != hilightboxes.end(); i++) {
-                driver->draw3DBox(*i, video::SColor(255, 0, 0, 0));
-            }
-
-            guienv->drawAll();
-
-            driver->endScene();
-
-            /*
-             Drawing ends
-             */
-
-            u16 fps = driver->getFPS();
-
-            if (lastFPS != fps) {
-                core::stringw str = L"Minetest [";
-                str += driver->getName();
-                str += "] FPS:";
-                str += fps;
-                str += " (";
-                str += camera->getPosition().X;
-                str += ",";
-                str += camera->getPosition().Y;
-                str += ",";
-                str += camera->getPosition().Z;
-                str += ")";
-
-
-                device->setWindowCaption(str.c_str());
-                lastFPS = fps;
-            }
-
-            /*}
-             else
-             device->yield();*/
+            } // End of if else
         }
 
         if (server != NULL)
