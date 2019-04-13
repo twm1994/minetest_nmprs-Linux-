@@ -92,19 +92,19 @@ removed:
 			player->move(dtime_part, *m_map);
 		}
 
-		/*
-			Move npcs. Only works on client
-		*/
-		if (!m_npcs.empty())
-		{
-			for (core::list<Npc*>::Iterator j = m_npcs.begin();
-				j != m_npcs.end(); j++)
-			{
-				Npc *npc = *j;
-				npc->speed.Y -= 9.81 * BS * dtime_part * 2;
-				npc->randomWalk(dtime_part, *m_map);
-			}
-		}
+//		/*
+//			Move npcs. Only works on client
+//		*/
+//		if (!m_npcs.empty())
+//		{
+//			for (core::list<Npc*>::Iterator j = m_npcs.begin();
+//				j != m_npcs.end(); j++)
+//			{
+//				Npc *npc = *j;
+//				npc->speed.Y -= 9.81 * BS * dtime_part * 2;
+//				npc->randomWalk(dtime_part, *m_map);
+//			}
+//		}
 
 	} while (dtime > 0.001);
 
@@ -113,7 +113,8 @@ removed:
 
 Map & Environment::getMap()
 {
-	return *m_map;
+	// TODO load map from file instead of dynamic generation
+    return *m_map;
 }
 
 void Environment::addPlayer(Player *player)
@@ -159,13 +160,13 @@ core::list<Player*> Environment::getPlayers()
 	return m_players;
 }
 
-void Environment::addNpc(Npc *npc)
-{
-	m_npcs.push_back(npc);
-}
-
-core::list<Npc*> Environment::getNpcs()
-{
-	return m_npcs;
-}
+//void Environment::addNpc(Npc *npc)
+//{
+//	m_npcs.push_back(npc);
+//}
+//
+//core::list<Npc*> Environment::getNpcs()
+//{
+//	return m_npcs;
+//}
 
