@@ -30,7 +30,7 @@ using namespace jthread;
 #include "common_irrlicht.h"
 #include "map.h"
 #include "player.h"
-// #include "npc.h"
+#include "npc.h"
 #include "main.h"
 #include "test.h"
 #include "environment.h"
@@ -320,11 +320,13 @@ int main() {
         Server *server = NULL;
         if (hosting) {
             //server inits m_env, m_env inits MasterMap
-            //MasterMap inheritates Map, Map inits with camera_position,camera_direction,updater,m_heightmap,m_sector_cache,m_hwrapper,drawoffset
+            // ----------TODO: rewrite init MasterMap logic----------
+            // ----------TODO: load Map from disk at this point----------
             server = new Server();
             server->start(port);
         }
 
+        // ----------TODO: load Map from disk at this point----------
         Client client(smgr, materials); //this will create local player
         Address connect_address(0, 0, 0, 0, port);
         try {
@@ -353,7 +355,7 @@ int main() {
 
         camera->setFOV(FOV_ANGLE);
         // Just so big a value that everything rendered is visible
-        camera->setFarValue(BS * 1000);
+        camera->setFarValue(BS * 50);
 
 #define ZOOM_MAX 1.5
 #define ZOOM_MIN (-5.0*BS)

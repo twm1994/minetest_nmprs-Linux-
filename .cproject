@@ -19,8 +19,8 @@
 							<builder buildPath="${workspace_loc:/minetest_nmpr_gcc}/Debug" errorParsers="" id="cdt.managedbuild.tool.gnu.builder.mingw.base.145275328" keepEnvironmentInBuildfile="false" managedBuildOn="true" name="CDT Internal Builder" superClass="cdt.managedbuild.tool.gnu.builder.mingw.base"/>
 							<tool command="as" commandLinePattern="${COMMAND} ${FLAGS} ${OUTPUT_FLAG} ${OUTPUT_PREFIX}${OUTPUT} ${INPUTS}" errorParsers="org.eclipse.cdt.core.GASErrorParser" id="cdt.managedbuild.tool.gnu.assembler.mingw.exe.debug.66736441" name="GCC Assembler" superClass="cdt.managedbuild.tool.gnu.assembler.mingw.exe.debug">
 								<option id="gnu.both.asm.option.include.paths.1137356415" name="Include paths (-I)" superClass="gnu.both.asm.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;D:\cpp_project\jthread-1.3.3\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;D:\cpp_project\irrlicht-1.8.4\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc}\jthread-1.3.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc}\irrlicht-1.8.4\include&quot;"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.assembler.input.1185945974" superClass="cdt.managedbuild.tool.gnu.assembler.input"/>
 							</tool>
@@ -29,8 +29,8 @@
 								<option id="gnu.cpp.compiler.mingw.exe.debug.option.optimization.level.1948019781" name="Optimization Level" superClass="gnu.cpp.compiler.mingw.exe.debug.option.optimization.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.optimization.level.none" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.mingw.exe.debug.option.debugging.level.669298142" name="Debug Level" superClass="gnu.cpp.compiler.mingw.exe.debug.option.debugging.level" useByScannerDiscovery="false" value="gnu.cpp.compiler.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.cpp.compiler.option.include.paths.796829622" name="Include paths (-I)" superClass="gnu.cpp.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;D:\cpp_project\irrlicht-1.8.4\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;D:\cpp_project\jthread-1.3.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc}\irrlicht-1.8.4\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc}\jthread-1.3.3\include&quot;"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1656951169" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>
@@ -38,8 +38,8 @@
 								<option defaultValue="gnu.c.optimization.level.none" id="gnu.c.compiler.mingw.exe.debug.option.optimization.level.1958846806" name="Optimization Level" superClass="gnu.c.compiler.mingw.exe.debug.option.optimization.level" useByScannerDiscovery="false" valueType="enumerated"/>
 								<option id="gnu.c.compiler.mingw.exe.debug.option.debugging.level.377084043" name="Debug Level" superClass="gnu.c.compiler.mingw.exe.debug.option.debugging.level" useByScannerDiscovery="false" value="gnu.c.debugging.level.max" valueType="enumerated"/>
 								<option id="gnu.c.compiler.option.include.paths.588443975" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" useByScannerDiscovery="false" valueType="includePath">
-									<listOptionValue builtIn="false" value="&quot;D:\cpp_project\irrlicht-1.8.4\include&quot;"/>
-									<listOptionValue builtIn="false" value="&quot;D:\cpp_project\jthread-1.3.3\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc}\irrlicht-1.8.4\include&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc}\jthread-1.3.3\include&quot;"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.296766594" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
