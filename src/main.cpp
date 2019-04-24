@@ -410,6 +410,7 @@ int main() {
                 if (!pauseOverlay->isVisible()) {
                     device->getTimer()->stop();
                     pauseOverlay->setVisible(true);
+					device->getCursorControl()->setVisible(true);
                 }
                 if (device->isWindowActive()) {
                     driver->beginScene(true, true,
@@ -419,9 +420,13 @@ int main() {
 
                     driver->endScene();
                 }
+				if (receiver.isExit) {
+					break;
+				}
             } else {
                 if (pauseOverlay->isVisible()) {
                     pauseOverlay->setVisible(false);
+					device->getCursorControl()->setVisible(false);
                     device->getTimer()->start();
                 }
 
