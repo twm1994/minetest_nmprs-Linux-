@@ -68,28 +68,67 @@ MapBlock * BlockGenerator::makeBlock(MapSector *sector, s16 block_y) {
 }
 
 MapBlock * ClientBlockGenerator::makeBlock(MapSector *sector, s16 block_y) {
-	//=====Copy from MapBlock * BlockGenerator::makeBlock(MapSector *sector, s16 block_y)=====
 	MapBlock *block = sector->createBlankBlockNoInsert(block_y);
-	//=====Just generate a base level of grass=====
-	for (s16 z0 = 0; z0 < MAP_BLOCKSIZE; z0++) {
-		for (s16 x0 = 0; x0 < MAP_BLOCKSIZE; x0++) {
+	v2s16 sectorPos = sector->getPos();
+	//=====Set boundary block and normal block differently=====
+	if (((sectorPos.X == -1) || (sectorPos.X == MAP_LENGTH))
+			&& (sectorPos.Y > -1) && (sectorPos.Y < MAP_WIDTH)) {
+		//=====Boundary alone X axis=====
+		s16 x0;
+		if (sectorPos.X == -1) {
+			x0 = MAP_BLOCKSIZE - 1;
+		} else {
+			x0 = 0;
+		}
+		for (s16 z0 = 0; z0 < MAP_BLOCKSIZE; z0++) {
 			for (s16 y0 = 0; y0 < MAP_BLOCKSIZE; y0++) {
 				MapNode n;
-				if (y0 == 0 && block_y == MAP_BOTTOM) {
-					n.d = MATERIAL_GRASS;
-				} else {
-					n.d = MATERIAL_AIR;
-				}
+				n.d = MATERIAL_IGNORE;
 				block->setNode(v3s16(x0, y0, z0), n);
 			}
 		}
+
+	} else if (((sectorPos.Y == -1) || (sectorPos.Y == MAP_WIDTH))
+			&& (sectorPos.X > -1) && (sectorPos.X < MAP_LENGTH)) {
+		//=====Boundary alone Z axis=====
+		s16 z0;
+		if (sectorPos.Y == -1) {
+			z0 = MAP_BLOCKSIZE - 1;
+		} else {
+			z0 = 0;
+		}
+		for (s16 x0 = 0; x0 < MAP_BLOCKSIZE; x0++) {
+			for (s16 y0 = 0; y0 < MAP_BLOCKSIZE; y0++) {
+				MapNode n;
+				n.d = MATERIAL_IGNORE;
+				block->setNode(v3s16(x0, y0, z0), n);
+			}
+		}
+
+	} else if ((sectorPos.X > -1) && (sectorPos.X < MAP_LENGTH)
+			&& (sectorPos.Y > -1) && (sectorPos.Y < MAP_WIDTH)) {
+		//=====Normal block=====
+		//=====Just generate a base level of grass=====
+		for (s16 z0 = 0; z0 < MAP_BLOCKSIZE; z0++) {
+			for (s16 x0 = 0; x0 < MAP_BLOCKSIZE; x0++) {
+				for (s16 y0 = 0; y0 < MAP_BLOCKSIZE; y0++) {
+					MapNode n;
+					if (y0 == 0 && block_y == MAP_BOTTOM) {
+						n.d = MATERIAL_GRASS;
+					} else {
+						n.d = MATERIAL_AIR;
+					}
+					block->setNode(v3s16(x0, y0, z0), n);
+				}
+			}
+		}
+		bool probably_dark = false;
+		block->setProbablyDark(probably_dark);
 	}
-	bool probably_dark = false;
-	block->setProbablyDark(probably_dark);
-	v3s16 blockpos_map(sector->getPos().X, block_y, sector->getPos().Y);
 	//#####fetchBlock() should not send TOSERVER_GETBLOCK command, need to change it#####
+	v3s16 blockpos_map(sector->getPos().X, block_y, sector->getPos().Y);
 	m_client->fetchBlock(blockpos_map);
-	throw AsyncQueuedException("Client will fetch later");
+	return block;
 }
 
 MapBlock * MapSector::getBlockBuffered(s16 y) {
@@ -146,7 +185,6 @@ MapBlock * MapSector::createBlankBlock(s16 y) {
 
 /*
  This will generate a new block as needed.
- A valid heightmap is assumed to exist already.
  */
 MapBlock * MapSector::getBlock(s16 block_y) {
 	{

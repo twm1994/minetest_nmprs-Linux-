@@ -869,26 +869,35 @@ bool Map::updateChangedVisibleArea() {
 		for (s16 z = box_blocks.MinEdge.Z; z <= box_blocks.MaxEdge.Z; z++) {
 			for (s16 x = box_blocks.MinEdge.X; x <= box_blocks.MaxEdge.X; x++) {
 				// This intentionally creates new blocks on demand
+//				bool atBoundary = (((p3d.X == -1) || (p3d.X == MAP_LENGTH)) && (p3d.Z > -1)
+//						&& (p3d.Z < MAP_WIDTH))
+//						|| (((p3d.Z == -1) || (p3d.Z == MAP_WIDTH)) && (p3d.X > -1)
+//								&& (p3d.X < MAP_LENGTH));
+				bool inMap = (x >= -1) && (x <= MAP_LENGTH) && (z >= -1)
+						&& (z <= MAP_WIDTH) && (y >= MAP_BOTTOM);
+				//=====Only update block inside map, including boundary=====
+				if (inMap) {
+					try {
+						MapBlock * block = getBlock(v3s16(x, y, z));
+						if (block->getChangedFlag()) {
+							if (blocks_changed.empty() == true) {
+								// Print initial message when first is found
+								std::cout << "Updating changed MapBlocks at ";
+							}
 
-				try {
-					MapBlock * block = getBlock(v3s16(x, y, z));
-					if (block->getChangedFlag()) {
-						if (blocks_changed.empty() == true) {
-							// Print initial message when first is found
-							std::cout << "Updating changed MapBlocks at ";
+							v3s16 p = block->getPosRelative();
+							std::cout << "(" << p.X << "," << p.Y << "," << p.Z
+									<< ") ";
+							std::cout.flush();
+
+							blocks_changed.push_back(block);
+							block->resetChangedFlag();
 						}
-
-						v3s16 p = block->getPosRelative();
-						std::cout << "(" << p.X << "," << p.Y << "," << p.Z
-								<< ") ";
-						std::cout.flush();
-
-						blocks_changed.push_back(block);
-						block->resetChangedFlag();
+					} catch (InvalidPositionException &e) {
+					} catch (AsyncQueuedException &e) {
 					}
-				} catch (InvalidPositionException &e) {
-				} catch (AsyncQueuedException &e) {
 				}
+
 			}
 		}
 	}
