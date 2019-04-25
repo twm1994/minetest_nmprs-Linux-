@@ -771,8 +771,8 @@ int main() {
 			} // if (receiver.isPaused) {} else
 		}
 //		//=====Save the map at exit=====
-//		client.saveMap();
-//		server->saveMap();
+		client.saveMap();
+		server->saveMap();
 		if (server != NULL)
 			delete server;
 	} // client is deleted at this point

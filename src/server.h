@@ -43,6 +43,9 @@ public:
 	void AsyncRunStep();
 	void Receive();
 	void ProcessData(u8 *data, u32 datasize, u16 peer_id);
+	void saveMap() {
+		m_env.getMap().save(SERVER_MAP_FILE);
+	}
 
 private:
 	void SendPlayerPositions(float dtime);

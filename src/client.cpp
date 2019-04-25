@@ -1,5 +1,6 @@
 #include "client.h"
 #include "utility.h"
+#include "map.h" // Use MAP_LENGTH, MAP_WIDTH, MAP_HEIGHT, MAP_BOTTOM
 #include <iostream>
 #include "clientserver.h"
 #include <jmutexautolock.h>
@@ -42,6 +43,7 @@ Client::Client(scene::ISceneManager* smgr, video::SMaterial *materials) :
 
 	{
 		JMutexAutoLock envlock(m_env_mutex);
+		m_env.getMap().load(CLIENT_MAP_FILE);
 		m_env.getMap().StartUpdater();
 		Player *player = new Player(true, smgr->getRootSceneNode(), smgr, 0);
 		f32 y = BS * 2 + BS * 20;
@@ -51,8 +53,8 @@ Client::Client(scene::ISceneManager* smgr, video::SMaterial *materials) :
 		//add 5 random npcs
 		for (int i = 0; i < 5; i++) {
 			Npc *npc = new Npc(smgr->getRootSceneNode(), smgr, i + 100);
-			f32 x = ((float) rand() / (float) (RAND_MAX / 2) - 1.0) * 256;
-			f32 z = ((float) rand() / (float) (RAND_MAX / 2) - 1.0) * 256;
+			f32 x = ((float) rand() / (float) RAND_MAX) * (MAP_LENGTH - 1);
+			f32 z = ((float) rand() / (float) RAND_MAX) * (MAP_WIDTH - 1);
 			npc->setPosition(v3f(x, y, z));
 			npc->setRotation(
 					v3f(0,
@@ -249,29 +251,30 @@ bool Client::AsyncProcessData() {
 		goto getdata;
 	ToClientCommand command = (ToClientCommand) readU16(&data[0]);
 	if (command == TOCLIENT_BLOCKDATA) {
-		//#####Should not going into here#####
-		// Ignore too small packet
-		if (datasize < 8 + MapBlock::serializedLength())
-			goto getdata;
-		v3s16 p;
-		p.X = readS16(&data[2]);
-		p.Y = readS16(&data[4]);
-		p.Z = readS16(&data[6]);
-		dout_client << "Client: Thread: BLOCKDATA for (" << p.X << "," << p.Y
-				<< "," << p.Z << ")" << std::endl;
-		{ //envlock
-			JMutexAutoLock envlock(m_env_mutex);
-			v2s16 p2d(p.X, p.Z);
-			MapSector *sector = m_env.getMap().getSector(p2d);
-			try {
-				MapBlock *block = sector->getBlockNoCreate(p.Y);
-				block->deSerialize(&data[8]);
-			} catch (InvalidPositionException &e) {
-				MapBlock *block = new MapBlock(&m_env.getMap(), p);
-				block->deSerialize(&data[8]);
-				sector->insertBlock(block);
-			}
-		} //envlock
+		goto getdata;
+//		//#####Should not going into here#####
+//		// Ignore too small packet
+//		if (datasize < 8 + MapBlock::serializedLength())
+//			goto getdata;
+//		v3s16 p;
+//		p.X = readS16(&data[2]);
+//		p.Y = readS16(&data[4]);
+//		p.Z = readS16(&data[6]);
+//		dout_client << "Client: Thread: BLOCKDATA for (" << p.X << "," << p.Y
+//				<< "," << p.Z << ")" << std::endl;
+//		{ //envlock
+//			JMutexAutoLock envlock(m_env_mutex);
+//			v2s16 p2d(p.X, p.Z);
+//			MapSector *sector = m_env.getMap().getSector(p2d);
+//			try {
+//				MapBlock *block = sector->getBlockNoCreate(p.Y);
+//				block->deSerialize(&data[8]);
+//			} catch (InvalidPositionException &e) {
+//				MapBlock *block = new MapBlock(&m_env.getMap(), p);
+//				block->deSerialize(&data[8]);
+//				sector->insertBlock(block);
+//			}
+//		} //envlock
 
 	} else {
 		dout_client << "Client: Thread: Ingoring unknown command " << command
@@ -289,14 +292,14 @@ void Client::fetchBlock(v3s16 p) {
 	//=====Should just get block from block generator, but indicate server to generate the block on its map=====
 	m_fetchblock_history.insert(p, 0.0);
 	//=====This should generate new block=====
-	MapBlock *block = m_env.getMap().getBlock(p);
-	//#####Maybe should optimize this to reduce # of message sent, like inform server when add/remove node#####
-	SharedBuffer<u8> data(8);
-	writeU16(&data[0], TOSERVER_GETBLOCK);
-	writeS16(&data[2], p.X);
-	writeS16(&data[4], p.Y);
-	writeS16(&data[6], p.Z);
-	m_con.Send(PEER_ID_SERVER, 1, data, true);
+	m_env.getMap().getBlock(p);
+	//#####Maybe should optimize this to reduce # of message sent, like inform server when add/remove node(DONE)#####
+//	SharedBuffer<u8> data(8);
+//	writeU16(&data[0], TOSERVER_GETBLOCK);
+//	writeS16(&data[2], p.X);
+//	writeS16(&data[4], p.Y);
+//	writeS16(&data[6], p.Z);
+//	m_con.Send(PEER_ID_SERVER, 1, data, true);
 }
 
 IncomingPacket Client::getPacket() {
@@ -316,39 +319,75 @@ IncomingPacket Client::getPacket() {
 }
 
 void Client::removeNode(v3s16 nodepos) {
+	MapNode node;
 	// Test that the position exists
 	try {
 		JMutexAutoLock envlock(m_env_mutex);
-		m_env.getMap().getNode(nodepos);
+		node = m_env.getMap().getNode(nodepos);
 	} catch (InvalidPositionException &e) {
 		// Fail silently
 		return;
 	}
-	SharedBuffer<u8> data(8);
-	writeU16(&data[0], TOSERVER_REMOVENODE);
-	writeS16(&data[2], nodepos.X);
-	writeS16(&data[4], nodepos.Y);
-	writeS16(&data[6], nodepos.Z);
-	Send(0, data, true);
+	//=====Avoid destroying boundary and base level=====
+	if (node.d != MATERIAL_IGNORE && nodepos.Y != MAP_BOTTOM) {
+		// -----Add to m_remove_cache to handle removeNode event-----
+		dout_client << "Client::removeNode() at: (" << nodepos.X << ","
+				<< nodepos.Y << "," << nodepos.Z << ")" << std::endl;
+		std::cout << "Client::removeNode() at: (" << nodepos.X << ","
+				<< nodepos.Y << "," << nodepos.Z << ")" << std::endl;
+		SharedBuffer<u8> data(8);
+		writeU16(&data[0], TOSERVER_REMOVENODE);
+		writeS16(&data[2], nodepos.X);
+		writeS16(&data[4], nodepos.Y);
+		writeS16(&data[6], nodepos.Z);
+		Send(0, data, true);
+	} else {
+		dout_client
+				<< "Client::removeNode() ignored boundary/base level node at: ("
+				<< nodepos.X << "," << nodepos.Y << "," << nodepos.Z << ")"
+				<< std::endl;
+		std::cout
+				<< "Client::removeNode() ignored boundary/base level node at: ("
+				<< nodepos.X << "," << nodepos.Y << "," << nodepos.Z << ")"
+				<< std::endl;
+	}
 }
 
 void Client::addNode(v3s16 nodepos, MapNode n) {
+	MapNode node;
 	// Test that the position exists
 	try {
 		JMutexAutoLock envlock(m_env_mutex);
-		m_env.getMap().getNode(nodepos);
+		node = m_env.getMap().getNode(nodepos);
 	} catch (InvalidPositionException &e) {
 		// Fail silently
 		return;
 	}
-	u8 datasize = 8 + MapNode::serializedLength();
-	SharedBuffer<u8> data(datasize);
-	writeU16(&data[0], TOSERVER_ADDNODE);
-	writeS16(&data[2], nodepos.X);
-	writeS16(&data[4], nodepos.Y);
-	writeS16(&data[6], nodepos.Z);
-	n.serialize(&data[8]);
-	Send(0, data, true);
+	//=====Only add node inside boundary=====
+	if ((nodepos.X >= 0) && (nodepos.X < MAP_LENGTH * MAP_BLOCKSIZE)
+			&& (nodepos.Y >= MAP_BOTTOM * MAP_BLOCKSIZE)
+			&& (nodepos.Y < MAP_HEIGHT * MAP_BLOCKSIZE) && (nodepos.Z >= 0)
+			&& (nodepos.Z < MAP_WIDTH * MAP_BLOCKSIZE)) {
+		dout_client << "Client::addNode() at: (" << nodepos.X << ","
+				<< nodepos.Y << "," << nodepos.Z << "), type:" << s16(n.d)
+				<< std::endl;
+		dout_client.flush();
+		std::cout << "Client::addNode() at: (" << nodepos.X << "," << nodepos.Y
+				<< "," << nodepos.Z << "), type:" << s16(n.d) << std::endl;
+		u8 datasize = 8 + MapNode::serializedLength();
+		SharedBuffer<u8> data(datasize);
+		writeU16(&data[0], TOSERVER_ADDNODE);
+		writeS16(&data[2], nodepos.X);
+		writeS16(&data[4], nodepos.Y);
+		writeS16(&data[6], nodepos.Z);
+		n.serialize(&data[8]);
+		Send(0, data, true);
+	} else {
+		std::cout << "Client::addNode() ignored boundary/base level node at: ("
+				<< nodepos.X << "," << nodepos.Y << "," << nodepos.Z << ")"
+				<< std::endl;
+		return;
+	}
 }
 
 void Client::sendPlayerPos(float dtime) {

@@ -1,9 +1,9 @@
 #include "map.h"
-//#include "player.h"
 #include "main.h"
 #include <jmutexautolock.h>
 using namespace jthread;
 #include "client.h"
+#include <ctime> // Log function execution time
 #ifdef _WIN32
 #include <windows.h>
 #define sleep_ms(x) Sleep(x)
@@ -106,10 +106,31 @@ MapBlock * Map::getBlockNoCreate(v3s16 p3d) {
  Returns what the sector returns.
  */
 MapBlock * Map::getBlock(v3s16 p3d) {
+	//=====Set boundary block and normal block differently=====
 	v2s16 p2d(p3d.X, p3d.Z);
 	MapSector * sref = getSector(p2d);
 	MapSector *sector = sref;
 	MapBlock * blockref = sector->getBlock(p3d.Y);
+	if ((p3d.X > -1) && (p3d.X < MAP_LENGTH) && (p3d.Z > -1)
+			&& (p3d.Z < MAP_WIDTH)) {
+		//=====Add stored node if there is any inside boundary=====
+		for (s16 z = 0; z < MAP_BLOCKSIZE; z++) {
+			for (s16 y = 0; y < MAP_BLOCKSIZE; y++) {
+				for (s16 x = 0; x < MAP_BLOCKSIZE; x++) {
+					s16 minX = p3d.X * MAP_BLOCKSIZE;
+					s16 minY = p3d.Y * MAP_BLOCKSIZE;
+					s16 minZ = p3d.Z * MAP_BLOCKSIZE;
+					v3s16 nodepos = v3s16(minX + x, minY + y, minZ + z);
+					core::map<v3s16, s16>::Node *n = m_nodes.find(nodepos);
+					if (n != NULL) {
+						MapNode node;
+						node.d = (n->getValue());
+						blockref->setNode(x, y, z, node);
+					}
+				} // for(int x=0;x<MAP_BLOCKSIZE;x++
+			} // for(int y=0;y<MAP_BLOCKSIZE;y++)
+		} // for(int z=0;z<MAP_BLOCKSIZE;z++)
+	}
 	return blockref;
 }
 
@@ -880,14 +901,9 @@ bool Map::updateChangedVisibleArea() {
 
 	std::cout << std::endl;
 
-	std::cout << "Map::updateChangedVisibleArea(): "
-			"there are changed blocks" << std::endl;
-
 	//status.setReady(false);
 
 	core::map<v3s16, MapBlock*> modified_blocks;
-
-	std::cout << "Updating lighting" << std::endl;
 
 	updateLighting(blocks_changed, modified_blocks);
 
@@ -895,24 +911,81 @@ bool Map::updateChangedVisibleArea() {
 	 status.setTodo(modified_blocks.size());
 	 status.setDone(0);*/
 
-	std::cout << "Updating face cache of changed blocks" << std::endl;
-
 	core::map<v3s16, MapBlock *>::Iterator i = modified_blocks.getIterator();
 	for (; i.atEnd() == false; i++) {
 		MapBlock *block = i.getNode()->getValue();
 		block->updateFastFaces();
-
-		std::cout << "X";
-		std::cout.flush();
-
 		//status.setDone(status.getDone()+1);
 	}
-
-	std::cout << std::endl;
 
 	//status.setReady(true);
 
 	return true;
+}
+
+void Map::save(const char* fname) {
+	std::cout << "Size of m_nodes:" << m_nodes.size() << std::endl;
+	if (m_nodes.size() > 0) {
+		Json::StreamWriterBuilder builder;
+		builder.settings_["indentation"] = ""; // Write in one line
+		std::unique_ptr<Json::StreamWriter> writer(builder.newStreamWriter());
+		Json::Value map;
+		core::map<v3s16, s16>::Iterator i;
+		i = m_nodes.getIterator();
+		time_t t0 = time(nullptr);
+		s16 node_count = 0;
+		for (; i.atEnd() == false; i++) {
+			v3s16 p = i.getNode()->getKey();
+			s16 v = i.getNode()->getValue();
+			// -----air node and base level nodes will not be saved-----
+			if (p.X >= 0 && p.X < (MAP_LENGTH * MAP_BLOCKSIZE)
+					&& p.Y > MAP_BOTTOM * MAP_BLOCKSIZE
+					&& p.Y < MAP_HEIGHT * MAP_BLOCKSIZE && p.Z >= 0
+					&& p.Z < (MAP_WIDTH * MAP_BLOCKSIZE)) {
+				Json::Value node;
+				Json::Value pos;
+				pos[0] = p.X;
+				pos[1] = p.Y;
+				pos[2] = p.Z;
+				node["0"] = pos;
+				node["1"] = v;
+				map.append(node);
+				node_count++;
+			}
+		}
+		std::cout << "# nodes saved: " << node_count << std::endl;
+		std::ofstream ofs(fname);
+		writer->write(map, &ofs);
+		time_t t1 = time(nullptr);
+		std::cout << "Saved map in " << difftime(t1, t0) << "ms" << std::endl;
+	} else {
+		std::cout << "No node to save" << std::endl;
+	}
+
+}
+
+void Map::loadCreatedNodes(const char* fname) {
+	std::ifstream ifs(fname);
+	if (ifs) {
+		Json::CharReaderBuilder reader;
+		Json::Value map;
+		JSONCPP_STRING errs;
+		Json::parseFromStream(reader, ifs, &map, &errs);
+		std::cout << "Loading nodes from file" << std::endl;
+		time_t t0 = time(nullptr);
+		for (Json::Value::const_iterator i = map.begin(); i != map.end(); i++) {
+			Json::Value pos = (*i)["0"];
+			v3s16 nodePos = v3s16(pos[0].asInt(), pos[1].asInt(),
+					pos[2].asInt());
+			s16 d = (*i)["1"].asInt();
+			m_nodes.insert(nodePos, d);
+		}
+		time_t t1 = time(nullptr);
+		std::cout << "Loaded nodes in " << difftime(t1, t0) << "ms"
+				<< std::endl;
+	} else {
+		std::cout << "File does not exist" << std::endl;
+	}
 }
 
 MapSector * MasterMap::getSector(v2s16 p2d) {

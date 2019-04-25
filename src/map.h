@@ -17,6 +17,12 @@ using namespace jthread;
 #include "mapnode.h"
 #include "mapblock.h"
 #include "mapsector.h"
+#define MAP_LENGTH 35
+#define MAP_WIDTH 32
+#define MAP_HEIGHT 4
+#define MAP_BOTTOM 0
+#define SERVER_MAP_FILE "server_nodes.json"
+#define CLIENT_MAP_FILE "client_nodes.json"
 
 class Map;
 
@@ -58,6 +64,8 @@ protected:
 	// Be sure to set this to NULL when the cached sector is deleted
 	MapSector *m_sector_cache;
 	v2s16 m_sector_cache_p;
+	//=====Store created nodes=====
+	core::map<v3s16, s16> m_nodes;
 
 public:
 	v3s16 drawoffset;
@@ -115,9 +123,6 @@ public:
 
 	MapBlock * getBlockNoCreate(v3s16 p);
 	virtual MapBlock * getBlock(v3s16 p);
-
-	f32 getGroundHeight(v2s16 p, bool generate = false);
-	void setGroundHeight(v2s16 p, f32 y, bool generate = false);
 
 	bool isValidPosition(v3s16 p) {
 		v3s16 blockpos = getNodeBlockPos(p);
@@ -178,6 +183,16 @@ public:
 			throw InvalidPositionException();
 		v3s16 relpos = p - blockpos * MAP_BLOCKSIZE;
 		blockref->setNode(relpos, n);
+		//=====For node storage=====
+		if (n.d < MATERIAL_AIR)
+			m_nodes.insert(p, s16(n.d));
+		else {
+			// Don't save air node
+			core::map<v3s16, s16>::Node *n = m_nodes.find(p);
+			if (n != NULL) {
+				m_nodes.remove(n);
+			}
+		}
 	}
 
 	void setNode(s16 x, s16 y, s16 z, MapNode & n) {
@@ -241,6 +256,14 @@ public:
 
 	void renderMap(video::IVideoDriver* driver, video::SMaterial *materials);
 
+	//=====Node storage=====
+	void save(const char* fname);
+	void load(const char* fname) {
+		// -----Generate map in background at start up-----
+		std::cout << "Map::load() loading map" << std::endl;
+		loadCreatedNodes(fname);
+	}
+	void loadCreatedNodes(const char* fname);
 };
 
 class MasterMap: public Map {

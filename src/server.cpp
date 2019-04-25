@@ -36,6 +36,7 @@ void * ServerNetworkThread::Thread() {
 Server::Server() :
 		m_env(new MasterMap(), dout_server), m_con(PROTOCOL_ID, 512), m_thread(
 				this) {
+	m_env.getMap().load(SERVER_MAP_FILE);
 	m_env_mutex.Init();
 	m_con_mutex.Init();
 	m_step_dtime_mutex.Init();
@@ -120,19 +121,21 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id) {
 			return;
 		ToServerCommand command = (ToServerCommand) readU16(&data[0]);
 		if (command == TOSERVER_GETBLOCK) {
+			return;
+			//			/*
 			// Check for too short data
-			if (datasize < 8)
-				return;
-			/*
-			 Get block data and send it
-			 */
-			v3s16 p;
-			p.X = readS16(&data[2]);
-			p.Y = readS16(&data[4]);
-			p.Z = readS16(&data[6]);
-			MapBlock *block = m_env.getMap().getBlock(p);
-			dout_server << "Server::ProcessData(): GETBLOCK at (" << p.X << ","
-					<< p.Y << "," << p.Z << ")" << std::endl;
+//			if (datasize < 8)
+//				return;
+//			/*
+//			 Get block data and send it
+//			 */
+//			v3s16 p;
+//			p.X = readS16(&data[2]);
+//			p.Y = readS16(&data[4]);
+//			p.Z = readS16(&data[6]);
+//			m_env.getMap().getBlock(p);
+//			dout_server << "Server::ProcessData(): GETBLOCK at (" << p.X << ","
+//					<< p.Y << "," << p.Z << ")" << std::endl;
 			//=====No need to fetch from server, just generate the corresponding block on server=====
 //			u32 replysize = 8 + MapBlock::serializedLength();
 //			SharedBuffer<u8> reply(replysize);
@@ -153,6 +156,9 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id) {
 			p.Z = readS16(&data[6]);
 			MapNode n;
 			n.d = MATERIAL_AIR;
+			//#####This will generate blocks upon receiving command#####
+			v3s16 blockPos = m_env.getMap().getNodeBlockPos(p);
+			m_env.getMap().getBlock(blockPos);
 			m_env.getMap().setNode(p, n);
 			u32 replysize = 8;
 			SharedBuffer<u8> reply(replysize);
@@ -171,6 +177,9 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id) {
 			p.Z = readS16(&data[6]);
 			MapNode n;
 			n.deSerialize(&data[8]);
+			//#####This will generate blocks upon receiving command#####
+			v3s16 blockPos = m_env.getMap().getNodeBlockPos(p);
+			m_env.getMap().getBlock(blockPos);
 			m_env.getMap().setNode(p, n);
 			u32 replysize = 8 + MapNode::serializedLength();
 			SharedBuffer<u8> reply(replysize);
@@ -195,6 +204,13 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id) {
 			}
 			player->timeout_counter = 0.0;
 			v3s32 ps = readV3S32(&data[2]);
+			// #####Client map change is not triggered by server map change anymore#####
+			// #####It is the other way around#####
+			// #####Call getBlock here to create the block on server map if it is not created yet#####
+			v3s16 pos = v3s16((s16) ps.X / 100, (s16) ps.Y / 100,
+					(s16) ps.Z / 100);
+			v3s16 blockPos = m_env.getMap().getNodeBlockPos(pos);
+			m_env.getMap().getBlock(blockPos);
 			v3s32 ss = readV3S32(&data[2 + 12]);
 			v3f position((f32) ps.X / 100., (f32) ps.Y / 100.,
 					(f32) ps.Z / 100.);

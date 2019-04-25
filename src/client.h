@@ -100,6 +100,9 @@ public:
 	// Return value is valid until step()
 	core::list<Player*> getPlayers();
 	// core::list<Npc*> getNpcs();
+	void saveMap() {
+		m_env.getMap().save(CLIENT_MAP_FILE);
+	}
 private:
 	void ReceiveAll();
 	void Receive();
