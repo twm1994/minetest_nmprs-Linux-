@@ -2,6 +2,7 @@
 #define SERVER_HEADER
 #include "connection.h"
 #include "environment.h"
+#include "main.h"
 class Server;
 class ServerNetworkThread: public JThread {
 	bool run;

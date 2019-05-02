@@ -2,10 +2,9 @@
 #include "utility.h"
 #include <iostream>
 #include "clientserver.h"
-#include "map.h"
+//#include "map.h"
 #include <jmutexautolock.h>
 using namespace jthread;
-#include "main.h"
 #ifdef _WIN32
 #include <windows.h>
 #define sleep_ms(x) Sleep(x)
@@ -210,7 +209,15 @@ void Server::ProcessData(u8 *data, u32 datasize, u16 peer_id) {
 			v3s16 pos = v3s16((s16) ps.X / 100, (s16) ps.Y / 100,
 					(s16) ps.Z / 100);
 			v3s16 blockPos = m_env.getMap().getNodeBlockPos(pos);
-			m_env.getMap().getBlock(blockPos);
+			MapBlock * blockref;
+			try {
+				blockref = m_env.getMap().getBlockNoCreate(blockPos);
+			} catch (InvalidPositionException &e) {
+
+			}
+			if (blockref == nullptr) {
+				m_env.getMap().getBlock(blockPos);
+			}
 			v3s32 ss = readV3S32(&data[2 + 12]);
 			v3f position((f32) ps.X / 100., (f32) ps.Y / 100.,
 					(f32) ps.Z / 100.);

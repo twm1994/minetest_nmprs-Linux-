@@ -6,6 +6,12 @@ using namespace jthread;
 #define FOV_ANGLE (PI/2.5)
 // =====For map=====
 #define MAP_BOTTOM 0
+#define MAP_LENGTH 35
+#define MAP_WIDTH 32
+#define MAP_HEIGHT 4
+#define MAP_BOTTOM 0
+#define SERVER_MAP_FILE "server_nodes.json"
+#define CLIENT_MAP_FILE "client_nodes.json"
 // Change to struct settings or something
 extern s16 g_viewing_range_nodes;
 extern JMutex g_viewing_range_nodes_mutex;

@@ -111,6 +111,8 @@ MapBlock * Map::getBlock(v3s16 p3d) {
 	MapSector * sref = getSector(p2d);
 	MapSector *sector = sref;
 	MapBlock * blockref = sector->getBlock(p3d.Y);
+	std::cout << "Map::getBlock at (" << p3d.X << "," << p3d.Y << "," << p3d.Z
+			<< ")" << std::endl;
 	if ((p3d.X > -1) && (p3d.X < MAP_LENGTH) && (p3d.Z > -1)
 			&& (p3d.Z < MAP_WIDTH)) {
 		//=====Add stored node if there is any inside boundary=====

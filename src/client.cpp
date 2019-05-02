@@ -1,11 +1,9 @@
 #include "client.h"
 #include "utility.h"
-#include "map.h" // Use MAP_LENGTH, MAP_WIDTH, MAP_HEIGHT, MAP_BOTTOM
 #include <iostream>
 #include "clientserver.h"
 #include <jmutexautolock.h>
 using namespace jthread;
-#include "main.h"
 #ifdef _WIN32
 #include <windows.h>
 #define sleep_ms(x) Sleep(x)
@@ -289,6 +287,8 @@ void Client::Send(u16 channelnum, SharedBuffer<u8> data, bool reliable) {
 }
 
 void Client::fetchBlock(v3s16 p) {
+	if (m_fetchblock_history.find(p) != NULL)
+		return;
 	//=====Should just get block from block generator, but indicate server to generate the block on its map=====
 	m_fetchblock_history.insert(p, 0.0);
 	//=====This should generate new block=====

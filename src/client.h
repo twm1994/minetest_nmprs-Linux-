@@ -3,6 +3,7 @@
 #include "connection.h"
 #include "environment.h"
 #include "common_irrlicht.h"
+#include "main.h"
 #include <jmutex.h>
 using namespace jthread;
 

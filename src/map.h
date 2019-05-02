@@ -17,12 +17,6 @@ using namespace jthread;
 #include "mapnode.h"
 #include "mapblock.h"
 #include "mapsector.h"
-#define MAP_LENGTH 35
-#define MAP_WIDTH 32
-#define MAP_HEIGHT 4
-#define MAP_BOTTOM 0
-#define SERVER_MAP_FILE "server_nodes.json"
-#define CLIENT_MAP_FILE "client_nodes.json"
 
 class Map;
 
@@ -259,7 +253,7 @@ public:
 	//=====Node storage=====
 	void save(const char* fname);
 	void load(const char* fname) {
-		// -----Generate map in background at start up-----
+		//=====Generate map in background at start up=====
 		std::cout << "Map::load() loading map" << std::endl;
 		loadCreatedNodes(fname);
 	}
