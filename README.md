@@ -21,7 +21,7 @@ These changes are necessary to fix build errors
 
  - Download JThread and Irrlicht source file
  - Use CMake to build JThread makefile
- - Run the makefile (Use msys on MinGW or GUN Make)
+ - Run the makefile (Use msys on MinGW or GNU Make)
  - Use Code::Block to build Irrlicht win32-gcc version .a and .dll files
  - Make sure WS2_32 and gdi32 libraries are in the **Libraries** option of the OMNet++ project **Property**
  - Add **Irrlicht.dll** and **libjthread.dll** to the output folder that contains the .exe file after building the project
