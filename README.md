@@ -6,7 +6,7 @@ This is an modified version of the mingw-gcc branch on [this repository](https:/
 ## Dependencies and tools
 
  - [JThread 1.3.3](http://research.edm.uhasselt.be/jori/page/CS/Jthread.html) (Threading)
- - [Irrlicht-1.8.4](http://irrlicht.sourceforge.net/) () (3D engine)
+ - [Irrlicht-1.8.4](http://irrlicht.sourceforge.net/) (3D engine)
  - [CMake](https://cmake.org) (Library building tool)
  - [MinGW](http://www.mingw.org/) / [GNU Make](https://www.gnu.org/software/make/) (Library building tool)
  - [Code::Block](http://www.codeblocks.org/) (Library building tool)
