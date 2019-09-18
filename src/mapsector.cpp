@@ -1,5 +1,5 @@
 #include "mapsector.h"
-#include <jmutexautolock.h>
+#include <jthread/jmutexautolock.h>
 using namespace jthread;
 #include "client.h"
 #include "exceptions.h"

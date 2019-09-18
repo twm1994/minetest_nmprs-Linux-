@@ -1,7 +1,7 @@
 #ifndef MAPSECTOR_HEADER
 #define MAPSECTOR_HEADER
 
-#include <jmutex.h>
+#include <jthread/jmutex.h>
 using namespace jthread;
 #include "common_irrlicht.h"
 #include "mapblock.h"

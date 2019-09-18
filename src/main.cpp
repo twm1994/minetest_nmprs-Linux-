@@ -14,7 +14,7 @@
 #endif
 #include <iostream>
 #include <time.h>
-#include <jmutexautolock.h>
+#include <jthread/jmutexautolock.h>
 using namespace jthread;
 #include "common_irrlicht.h"
 #include "map.h"

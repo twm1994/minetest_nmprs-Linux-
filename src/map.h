@@ -1,7 +1,7 @@
 #ifndef MAP_HEADER
 #define MAP_HEADER
-#include <jmutex.h>
-#include <jthread.h>
+#include <jthread/jmutex.h>
+#include <jthread/jthread.h>
 using namespace jthread;
 #include <iostream>
 #include <malloc.h>

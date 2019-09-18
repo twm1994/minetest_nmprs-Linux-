@@ -1,6 +1,6 @@
 #ifndef MAIN_HEADER
 #define MAIN_HEADER
-#include <jmutex.h>
+#include <jthread/jmutex.h>
 using namespace jthread;
 #define PI 3.14159
 #define FOV_ANGLE (PI/2.5)

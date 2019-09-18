@@ -4,7 +4,7 @@
 #include "environment.h"
 #include "common_irrlicht.h"
 #include "main.h"
-#include <jmutex.h>
+#include <jthread/jmutex.h>
 using namespace jthread;
 
 class Client;

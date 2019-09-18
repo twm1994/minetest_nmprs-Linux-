@@ -5,7 +5,7 @@
 #ifndef MAPBLOCK_HEADER
 #define MAPBLOCK_HEADER
 
-#include <jmutex.h>
+#include <jthread/jmutex.h>
 namespace jthread {
 } // JThread 1.2 support
 using namespace jthread;
