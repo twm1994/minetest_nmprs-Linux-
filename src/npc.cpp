@@ -25,6 +25,7 @@ Npc::Npc(
 	avatar = mgr->getMesh("../data/character.b3d");
 	avatar_node = mgr->addAnimatedMeshSceneNode(avatar, this);
 	if (avatar_node) {
+		avatar->drop();
 		avatar_node->setMaterialFlag(video::EMF_LIGHTING, false);
 		avatar_node->setMaterialTexture(0, driver->getTexture("../data/character.png"));
 		avatar_node->setFrameLoop(200, 220);

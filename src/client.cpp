@@ -45,7 +45,7 @@ Client::Client(scene::ISceneManager* smgr, video::SMaterial *materials) :
 		m_env.getMap().StartUpdater();
 		Player *player = new Player(true, smgr->getRootSceneNode(), smgr, 0);
 		f32 y = BS * 2 + BS * 20;
-		player->setPosition(v3f(0, y, 0));
+		player->setPosition(v3f(300, y, 300));
 		m_env.addPlayer(player);
 
 		//add 5 random npcs

@@ -111,8 +111,8 @@ MapBlock * Map::getBlock(v3s16 p3d) {
 	MapSector * sref = getSector(p2d);
 	MapSector *sector = sref;
 	MapBlock * blockref = sector->getBlock(p3d.Y);
-	std::cout << "Map::getBlock at (" << p3d.X << "," << p3d.Y << "," << p3d.Z
-			<< ")" << std::endl;
+//	std::cout << "Map::getBlock at (" << p3d.X << "," << p3d.Y << "," << p3d.Z
+//			<< ")" << std::endl;
 	if ((p3d.X > -1) && (p3d.X < MAP_LENGTH) && (p3d.Z > -1)
 			&& (p3d.Z < MAP_WIDTH)) {
 		//=====Add stored node if there is any inside boundary=====
@@ -884,7 +884,8 @@ bool Map::updateChangedVisibleArea() {
 						if (block->getChangedFlag()) {
 							if (blocks_changed.empty() == true) {
 								// Print initial message when first is found
-								std::cout << "Updating changed MapBlocks at ";
+								std::cout
+										<< "Map::updateChangedVisibleArea() Updating changed MapBlocks at ";
 							}
 
 							v3s16 p = block->getPosRelative();

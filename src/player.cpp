@@ -30,16 +30,14 @@ Player::Player(
 	m_is_local(is_local),
 	m_position(0, 0, 0)
 {
-	m_box = core::aabbox3d<f32>(-BS, -BS, -BS, BS, BS, BS);
-
-	//m_bill = NULL;
-
+	m_box = core::aabbox3d<f32>(-BS, -BS, -BS, BS, 2 * BS, BS);
 	//if(is_local == false)
 	//{
 	video::IVideoDriver* driver = SceneManager->getVideoDriver();
 	avatar = mgr->getMesh("../data/character.b3d");
 	avatar_node = mgr->addAnimatedMeshSceneNode(avatar,this);
 	if (avatar_node) {
+		avatar->drop();
 		avatar_node->setMaterialFlag(video::EMF_LIGHTING, false);
 		avatar_node->setMaterialTexture(0,driver->getTexture("../data/character.png"));
 		//avatar_node->setFrameLoop(168,188);
@@ -106,7 +104,7 @@ void Player::move(f32 dtime, Map &map)
 		oldpos.Z + PLAYER_RADIUS
 	);
 
-	//hilightboxes.push_back(playerbox);
+//	hilightboxes.push_back(playerbox);
 
 	touching_ground = false;
 

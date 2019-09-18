@@ -359,6 +359,10 @@ int main() {
 
 		gui::IGUIStaticText *guitext = guienv->addStaticText(L"Minetest-c55",
 				core::rect<s32>(5, 5, 5 + 300, 5 + textsize.Y), false, false);
+		gui::IGUIStaticText *positiontextgui = guienv->addStaticText(
+				L"Pointing at",
+				core::rect<s32>(5, 5 + textsize.Y, 5 + 300, 5 + 2 * textsize.Y),
+				false, false);
 		/*
 		 Main loop
 		 */
@@ -636,19 +640,16 @@ int main() {
 				if (nodefound) {
 					static v3s16 nodepos_old(-1, -1, -1);
 					if (nodepos != nodepos_old) {
-						std::cout << "Pointing at (" << nodepos.X << ","
-								<< nodepos.Y << "," << nodepos.Z << ")"
-								<< std::endl;
+//						std::cout << "Pointing at (" << nodepos.X << ","
+//								<< nodepos.Y << "," << nodepos.Z << ")"
+//								<< std::endl;
+						wchar_t positiontext[30];
+						swprintf(positiontext, 30, L"Pointing at (%i,%i,%i)",
+								nodepos.X, nodepos.Y, nodepos.Z);
+						positiontextgui->setText(positiontext);
 						nodepos_old = nodepos;
-
-						/*wchar_t positiontext[20];
-						 swprintf(positiontext, 20, L"(%i,%i,%i)",
-						 nodepos.X, nodepos.Y, nodepos.Z);
-						 positiontextgui->setText(positiontext);*/
 					}
-
-//					hilightboxes.push_back(nodefacebox);
-
+//					hilightboxes.push_back(Map::getNodeBox(nodepos));
 					if (receiver.leftclicked) {
 						std::cout << "Removing block (MapNode)" << std::endl;
 						u32 time1 = device->getTimer()->getRealTime();
@@ -730,7 +731,7 @@ int main() {
 						video::SColor(255, 255, 255, 255));
 
 				video::SMaterial m;
-				m.Thickness = 10;
+				m.Thickness = 5;
 				m.Lighting = false;
 				driver->setMaterial(m);
 
@@ -738,6 +739,9 @@ int main() {
 //						hilightboxes.begin(); i != hilightboxes.end(); i++) {
 //					driver->draw3DBox(*i, video::SColor(255, 0, 0, 0));
 //				}
+
+				driver->draw3DBox(player->getBoundingBox(),
+						video::SColor(255, 0, 0, 0));
 
 				guienv->drawAll();
 
