@@ -740,8 +740,8 @@ int main() {
 //					driver->draw3DBox(*i, video::SColor(255, 0, 0, 0));
 //				}
 
-				driver->draw3DBox(player->getBoundingBox(),
-						video::SColor(255, 0, 0, 0));
+//				driver->draw3DBox(player->getBoundingBox(),
+//						video::SColor(255, 0, 0, 0));
 
 				guienv->drawAll();
 
