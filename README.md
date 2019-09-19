@@ -2,7 +2,7 @@
 
 Based on this [repository](https://github.com/twm1994/minetest_nmprs).  
  
-Tested on Pop!\_OS 18.04 LTS.
+Tested on ***Pop!\_OS 18.04 LTS***.
 
 ## Dependencies and tools
 The following libraries can be installed with **apt**
