@@ -7,7 +7,7 @@ Tested on Pop!\_OS 18.04 LTS.
 ## Dependencies and tools
 The following libraries can be installed with **apt**
  - libirrlicht-dev
- - libirrlicht-dev
+ - libjthread-dev
 
 For **jsoncpp**, my setup is as followed
  - download the [source files](https://github.com/open-source-parsers/jsoncpp) 
