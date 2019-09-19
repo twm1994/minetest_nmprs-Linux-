@@ -13,14 +13,13 @@ For **jsoncpp**, my setup is as followed
  - download the [source files](https://github.com/open-source-parsers/jsoncpp) 
  - run **amalgamate.py** at the root directory of **jsoncpp** folder
  - copy the amalgamared source to **$HOME/jsoncpp**, which has the following structure
-
-"""
+```bash
 .
 ├── json
 │   ├── json-forwards.h
 │   └── json.h
 └── jsoncpp.cpp
-"""
+```
 
 ## How to build
 I followed the instructions in the [original repository](https://github.com/celeron55/minetest_nmpr).
