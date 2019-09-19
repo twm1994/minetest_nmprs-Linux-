@@ -1,30 +1,39 @@
-# Minetest NMPRS
+# Minetest NMPRS (Linux)
 
-This is an modified version of the mingw-gcc branch on [this repository](https://github.com/twm1994/minetest_nmpr).
- Tested on OMNeT++ 5.4.1, using MinGW GCC toolchain.
+Based on this [repository](https://github.com/twm1994/minetest_nmprs).  
+ 
+Tested on Pop!\_OS 18.04 LTS.
 
 ## Dependencies and tools
+The following libraries can be installed with **apt**
+ - libirrlicht-dev
+ - libirrlicht-dev
 
- - [JThread 1.3.3](http://research.edm.uhasselt.be/jori/page/CS/Jthread.html) (Threading)
- - [Irrlicht-1.8.4](http://irrlicht.sourceforge.net/) (3D engine)
- - [CMake](https://cmake.org) (Library building tool)
- - [MinGW](http://www.mingw.org/) / [GNU Make](https://www.gnu.org/software/make/) (Library building tool)
- - [Code::Block](http://www.codeblocks.org/) (Library building tool)
-
-## Change log
-
-These changes are necessary to fix build errors
- - In **socket.h**: add `#define` related to using windows socket utility
- - In **loadstatus.h**: add `s{w,n}printf` definition
+For **jsoncpp**, my setup is as followed
+ - download the [source files](https://github.com/open-source-parsers/jsoncpp) 
+ - run **amalgamate.py** at the root directory of **jsoncpp** folder
+ - copy the amalgamared source to **$HOME/jsoncpp**, which has the following structure
+"""
+.
+├── json
+│   ├── json-forwards.h
+│   └── json.h
+└── jsoncpp.cpp
+"""
 
 ## How to build
+I followed the instructions in the [original repository](https://github.com/celeron55/minetest_nmpr).
 
- - Download JThread and Irrlicht source file
- - Use CMake to build JThread makefile
- - Run the makefile (Use msys on MinGW or GNU Make)
- - Use Code::Block to build Irrlicht win32-gcc version .a and .dll files
- - Make sure WS2_32 and gdi32 libraries are in the **Libraries** option of the OMNet++ project **Property**
- - Add **Irrlicht.dll** and **libjthread.dll** to the output folder that contains the .exe file after building the project
+>Building:
+```
+$ make
+```
+
+>Running:
+```
+$ cd bin  # "bin" is required to be the working directory so that data is located at "../data"
+$ ./test
+```
 
 ## License
 

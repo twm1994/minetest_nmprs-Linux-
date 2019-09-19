@@ -8,7 +8,7 @@ OBJECTS = $(SOURCES:.cpp=.o)
 IRRLICHTPATH = /usr/include/irrlicht
 JTHREADPATH = jthread
 
-CPPFLAGS = -I/usr/include/X11 -I/usr/include/irrlicht -I/home/twm/jsoncpp
+CPPFLAGS = -I/usr/include/X11 -I/usr/include/irrlicht -I$(HOME)/jsoncpp
 
 #CXXFLAGS = -O3 -ffast-math -Wall
 #CXXFLAGS = -O3 --fast-math -Wall -g
